@@ -6,9 +6,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/centerseat/ctc/internal/compose"
-	"github.com/centerseat/ctc/internal/docker"
-	"github.com/centerseat/ctc/internal/tui"
+	"github.com/chaiops/ctc/internal/compose"
+	"github.com/chaiops/ctc/internal/docker"
+	"github.com/chaiops/ctc/internal/tui"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/centerseat/ctc/internal/docker"
+	"github.com/chaiops/ctc/internal/docker"
 )
 
 type Screen int

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/centerseat/ctc/internal/docker"
+	"github.com/chaiops/ctc/internal/docker"
 )
 
 // Build converts inspected containers and their related networks/volumes into

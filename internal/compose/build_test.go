@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/centerseat/ctc/internal/docker"
+	"github.com/chaiops/ctc/internal/docker"
 )
 
 func sampleContainer() docker.Container {

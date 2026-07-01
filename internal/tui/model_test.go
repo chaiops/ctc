@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/centerseat/ctc/internal/docker"
+	"github.com/chaiops/ctc/internal/docker"
 )
 
 func newModel() Model {

@@ -1,4 +1,4 @@
-module github.com/centerseat/ctc
+module github.com/chaiops/ctc
 
 go 1.25.0
 

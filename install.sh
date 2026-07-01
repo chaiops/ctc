@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-MODULE="github.com/centerseat/ctc"
+MODULE="github.com/chaiops/ctc"
 VERSION="${CTC_VERSION:-latest}"
 BIN_NAME="ctc"
 
