@@ -62,51 +62,11 @@ go_version_ok() {
   return 1
 }
 
-install_go() {
-  local go_ver="1.25.0"
-  local tmp url tarball
-  tmp="$(mktemp -d)"
-  tarball="go${go_ver}.${GOOS}-${GOARCH}.tar.gz"
-  url="https://go.dev/dl/${tarball}"
-
-  step "downloading Go ${go_ver} (${GOOS}/${GOARCH})"
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$url" -o "${tmp}/${tarball}" || fail "failed to download Go"
-  elif command -v wget >/dev/null 2>&1; then
-    wget -qO "${tmp}/${tarball}" "$url" || fail "failed to download Go"
-  else
-    fail "need curl or wget to download Go"
-  fi
-
-  # Prefer a user-writable location; fall back to sudo /usr/local.
-  local go_root
-  if [ -w /usr/local ] || [ "$(id -u)" = "0" ]; then
-    go_root="/usr/local"
-    step "installing Go to ${go_root}/go"
-    rm -rf "${go_root}/go"
-    tar -C "$go_root" -xzf "${tmp}/${tarball}"
-  elif command -v sudo >/dev/null 2>&1; then
-    go_root="/usr/local"
-    step "installing Go to ${go_root}/go (sudo)"
-    sudo rm -rf "${go_root}/go"
-    sudo tar -C "$go_root" -xzf "${tmp}/${tarball}"
-  else
-    go_root="${HOME}/.local"
-    mkdir -p "$go_root"
-    step "installing Go to ${go_root}/go"
-    rm -rf "${go_root}/go"
-    tar -C "$go_root" -xzf "${tmp}/${tarball}"
-  fi
-
-  export PATH="${go_root}/go/bin:${PATH}"
-  rm -rf "$tmp"
-
-  go_version_ok || fail "Go installation did not succeed"
-}
-
 # --- install ctc -------------------------------------------------------------
-GOBIN="$(go env GOBIN 2>/dev/null || true)"
-[ -z "$GOBIN" ] && GOBIN="$(go env GOPATH 2>/dev/null)/bin"
+resolve_gobin() {
+  GOBIN="$(go env GOBIN 2>/dev/null || true)"
+  [ -z "$GOBIN" ] && GOBIN="$(go env GOPATH 2>/dev/null)/bin"
+}
 
 install_ctc() {
   step "building ${BIN_NAME} from ${MODULE}@${VERSION}"
@@ -125,14 +85,15 @@ main() {
   detect_platform
   info "platform: ${GOOS}/${GOARCH}"
 
-  if go_version_ok; then
-    info "Go found: $(go env GOVERSION)"
-  else
-    warn "Go ${GO_MIN_MAJOR}.${GO_MIN_MINOR}+ not found — installing"
-    install_go
-    info "Go installed: $(go env GOVERSION)"
+  if ! command -v go >/dev/null 2>&1; then
+    fail "Go is not installed or not on your PATH. Install Go ${GO_MIN_MAJOR}.${GO_MIN_MINOR}+ from https://go.dev/dl/ and try again."
   fi
+  if ! go_version_ok; then
+    fail "Go $(go env GOVERSION 2>/dev/null || echo '?') is too old. ctc needs Go ${GO_MIN_MAJOR}.${GO_MIN_MINOR}+ — upgrade from https://go.dev/dl/ and try again."
+  fi
+  info "Go found: $(go env GOVERSION)"
 
+  resolve_gobin
   mkdir -p "$GOBIN"
   install_ctc
 
