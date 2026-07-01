@@ -83,7 +83,7 @@ func main() {
 	}
 
 	m := tui.New(items).WithBuild(build).WithEdit(editFn).WithSave(saveFn)
-	if _, err := tea.NewProgram(m).Run(); err != nil {
+	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}

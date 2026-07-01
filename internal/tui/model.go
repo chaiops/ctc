@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/centerseat/ctc/internal/docker"
 )
 
@@ -49,6 +50,8 @@ type Model struct {
 	edit    EditFunc
 	status  string
 	err     string
+	width   int
+	height  int
 }
 
 func New(items []docker.ContainerSummary) Model {
@@ -80,6 +83,10 @@ func (m Model) Init() tea.Cmd { return nil }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
 	case PreviewReadyMsg:
 		m.yaml = msg.YAML
 		m.screen = ScreenPreview
@@ -170,32 +177,164 @@ func (m Model) updatePreview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	if m.screen == ScreenPreview {
-		var b strings.Builder
-		b.WriteString("Preview  [e]dit  [s]ave  [esc] back  [q]uit\n\n")
-		if m.err != "" {
-			b.WriteString("! " + m.err + "\n\n")
-		}
-		if m.status != "" {
-			b.WriteString(m.status + "\n\n")
-		}
-		lines := strings.Split(m.yaml, "\n")
-		for i := m.offset; i < len(lines) && i < m.offset+30; i++ {
-			b.WriteString(lines[i] + "\n")
-		}
-		return b.String()
+		return m.previewView()
 	}
+	return m.listView()
+}
+
+func (m Model) listView() string {
 	var b strings.Builder
-	b.WriteString("Select containers  [space] toggle  [a] all  [enter] build  [q]uit\n\n")
+
+	b.WriteString(titleStyle.Render("  ctc · container → compose  "))
+	b.WriteString("\n")
+	n := len(m.Selected())
+	b.WriteString(subtitleStyle.Render(fmt.Sprintf(
+		"%d container(s) · %d selected", len(m.items), n)))
+	b.WriteString("\n\n")
+
 	for i, c := range m.items {
-		cur := " "
+		cursor := "  "
 		if i == m.cursor {
-			cur = ">"
+			cursor = cursorStyle.Render("▸ ")
 		}
-		box := "[ ]"
+
+		box := "○"
 		if m.checked[i] {
-			box = "[x]"
+			box = checkedStyle.Render("●")
+		} else {
+			box = metaStyle.Render("○")
 		}
-		b.WriteString(fmt.Sprintf("%s %s %-20s %-25s %s\n", cur, box, c.Names, c.Image, c.State))
+
+		name := c.Names
+		if i == m.cursor {
+			name = rowSelStyle.Render(name)
+		} else {
+			name = rowStyle.Render(name)
+		}
+
+		badge := stoppedBadge.Render("○ " + c.State)
+		if isRunning(c.State) {
+			badge = runningBadge.Render("● " + c.State)
+		}
+
+		line := fmt.Sprintf("%s%s  %-24s  %-28s  %s",
+			cursor, box,
+			truncate(name, 24),
+			imageStyle.Render(truncate(c.Image, 28)),
+			badge,
+		)
+		if i == m.cursor {
+			line = selectedRowBg.Render(line)
+		}
+		b.WriteString(line + "\n")
+	}
+
+	b.WriteString("\n")
+	b.WriteString(help(
+		"space", "toggle", "a", "all",
+		"↑↓", "move", "enter", "build", "q", "quit",
+	))
+	return b.String()
+}
+
+func (m Model) previewView() string {
+	var b strings.Builder
+
+	b.WriteString(titleStyle.Render("  docker-compose.yml preview  "))
+	b.WriteString("\n")
+
+	if m.err != "" {
+		b.WriteString(statusWarnStyle.Render("⚠ "+m.err) + "\n")
+	}
+	if m.status != "" {
+		style := statusOKStyle
+		if strings.HasPrefix(m.status, "save error") || strings.HasPrefix(m.status, "edit error") {
+			style = statusErrStyle
+		} else if m.status == "save cancelled" {
+			style = statusWarnStyle
+		}
+		b.WriteString(style.Render(m.status) + "\n")
+	}
+	b.WriteString("\n")
+
+	lines := strings.Split(m.yaml, "\n")
+	visible := 24
+	if m.height > 12 {
+		visible = m.height - 10
+	}
+	var body strings.Builder
+	for i := m.offset; i < len(lines) && i < m.offset+visible; i++ {
+		body.WriteString(highlightYAML(lines[i]) + "\n")
+	}
+
+	frame := previewFrame
+	if m.width > 4 {
+		frame = frame.Width(m.width - 4)
+	}
+	b.WriteString(frame.Render(strings.TrimRight(body.String(), "\n")))
+	b.WriteString("\n\n")
+	b.WriteString(help(
+		"e", "edit", "s", "save", "↑↓", "scroll", "esc", "back", "q", "quit",
+	))
+	return b.String()
+}
+
+func isRunning(state string) bool {
+	return strings.EqualFold(state, "running")
+}
+
+func truncate(s string, max int) string {
+	// max counts visible runes; s may already carry ANSI styling, so measure
+	// with lipgloss.Width and only cut plain strings.
+	if lipgloss.Width(s) <= max {
+		return s
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max-1]) + "…"
+}
+
+// help renders alternating key/label pairs into a footer line.
+func help(pairs ...string) string {
+	var b strings.Builder
+	for i := 0; i+1 < len(pairs); i += 2 {
+		if i > 0 {
+			b.WriteString(helpStyle.Render("  ·  "))
+		}
+		b.WriteString(helpKeyStyle.Render(pairs[i]))
+		b.WriteString(helpStyle.Render(" " + pairs[i+1]))
 	}
 	return b.String()
+}
+
+// highlightYAML applies light syntax coloring to one YAML line.
+func highlightYAML(line string) string {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return line
+	}
+	if strings.HasPrefix(trimmed, "#") {
+		return yamlCommentStyle.Render(line)
+	}
+
+	indent := line[:len(line)-len(strings.TrimLeft(line, " "))]
+
+	// List item: "- value"
+	if strings.HasPrefix(trimmed, "- ") {
+		return indent + yamlListStyle.Render("- ") + yamlValueStyle.Render(trimmed[2:])
+	}
+
+	// "key: value" or "key:"
+	if idx := strings.Index(trimmed, ":"); idx >= 0 {
+		key := trimmed[:idx]
+		rest := trimmed[idx+1:]
+		out := indent + yamlKeyStyle.Render(key) + yamlValueStyle.Render(":")
+		if rest != "" {
+			out += yamlValueStyle.Render(rest)
+		}
+		return out
+	}
+	return yamlValueStyle.Render(line)
 }
