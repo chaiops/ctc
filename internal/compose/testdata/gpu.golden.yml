@@ -1,0 +1,37 @@
+services:
+    web:
+        image: nginx:1.27
+        command:
+            - nginx
+            - -g
+            - daemon off;
+        environment:
+            - FOO=bar
+            - BAZ=qux
+        ports:
+            - 0.0.0.0:8080:80/tcp
+        volumes:
+            - /srv/html:/usr/share/nginx/html
+            - datavol:/data
+        networks:
+            - appnet
+        restart: unless-stopped
+        labels:
+            com.example.role: frontend
+        cap_add:
+            - NET_ADMIN
+        runtime: nvidia
+        deploy:
+            resources:
+                reservations:
+                    devices:
+                        - driver: nvidia
+                          count: all
+                          capabilities:
+                            - gpu
+networks:
+    appnet:
+        driver: bridge
+volumes:
+    datavol:
+        driver: local
