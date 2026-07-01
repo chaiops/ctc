@@ -29,6 +29,11 @@ func Build(cs []docker.Container, nets []docker.Network, vols []docker.Volume) F
 			Ports:       ports(c.HostConfig.PortBindings),
 			Volumes:     mounts(c.Mounts),
 			Networks:    networkNames(c.NetworkSettings.Networks),
+			Tmpfs:       tmpfsMounts(c.Mounts),
+		}
+		if nm := networkMode(c.HostConfig.NetworkMode); nm != "" {
+			s.NetworkMode = nm
+			s.Networks = nil
 		}
 		if d := devices(c.HostConfig.DeviceRequests); d != nil {
 			s.Deploy = &Deploy{Resources{Reservations{Devices: d}}}
@@ -71,9 +76,12 @@ func ports(pb map[string][]docker.PortBinding) []string {
 	var out []string
 	for _, k := range keys {
 		for _, b := range pb[k] {
-			if b.HostIP != "" {
+			switch {
+			case b.HostPort == "":
+				out = append(out, k)
+			case b.HostIP != "":
 				out = append(out, b.HostIP+":"+b.HostPort+":"+k)
-			} else {
+			default:
 				out = append(out, b.HostPort+":"+k)
 			}
 		}
@@ -84,13 +92,40 @@ func ports(pb map[string][]docker.PortBinding) []string {
 func mounts(ms []docker.Mount) []string {
 	var out []string
 	for _, m := range ms {
+		if m.Type == "tmpfs" {
+			continue
+		}
 		src := m.Source
 		if m.Type == "volume" {
 			src = m.Name
 		}
-		out = append(out, src+":"+m.Destination)
+		v := src + ":" + m.Destination
+		if !m.RW {
+			v += ":ro"
+		}
+		out = append(out, v)
 	}
 	return out
+}
+
+func tmpfsMounts(ms []docker.Mount) []string {
+	var out []string
+	for _, m := range ms {
+		if m.Type == "tmpfs" {
+			out = append(out, m.Destination)
+		}
+	}
+	return out
+}
+
+// networkMode maps a docker HostConfig.NetworkMode to the compose
+// network_mode value, returning "" when the default mode should be
+// represented via the networks: list instead.
+func networkMode(nm string) string {
+	if nm == "" || nm == "default" || nm == "bridge" {
+		return ""
+	}
+	return nm
 }
 
 func networkNames(n map[string]docker.NetworkEndpoint) []string {

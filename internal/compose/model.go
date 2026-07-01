@@ -22,6 +22,8 @@ type Service struct {
 	CapAdd      []string          `yaml:"cap_add,omitempty"`
 	CapDrop     []string          `yaml:"cap_drop,omitempty"`
 	Runtime     string            `yaml:"runtime,omitempty"`
+	NetworkMode string            `yaml:"network_mode,omitempty"`
+	Tmpfs       []string          `yaml:"tmpfs,omitempty"`
 	Deploy      *Deploy           `yaml:"deploy,omitempty"`
 }
 
