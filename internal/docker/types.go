@@ -33,6 +33,7 @@ type HostConfig struct {
 	Runtime        string
 	DeviceRequests []DeviceRequest
 	PortBindings   map[string][]PortBinding
+	NetworkMode    string `json:"NetworkMode"`
 }
 
 type RestartPolicy struct {

@@ -37,13 +37,27 @@ func List(run Runner) ([]ContainerSummary, error) {
 	return ParsePS(out)
 }
 
-func Inspect(run Runner, ids []string) ([]Container, error) {
-	args := append([]string{"inspect"}, ids...)
-	out, err := run("docker", args...)
-	if err != nil {
-		return nil, err
+// Inspect inspects each id individually so that a single bad id does not
+// abort the whole batch. It returns the successfully inspected containers
+// and a separate list of ids that failed to inspect. A non-nil error is
+// returned only for unexpected/total failures, not per-id misses.
+func Inspect(run Runner, ids []string) ([]Container, []string, error) {
+	var cs []Container
+	var failed []string
+	for _, id := range ids {
+		out, err := run("docker", "inspect", id)
+		if err != nil {
+			failed = append(failed, id)
+			continue
+		}
+		one, perr := ParseInspect(out)
+		if perr != nil {
+			failed = append(failed, id)
+			continue
+		}
+		cs = append(cs, one...)
 	}
-	return ParseInspect(out)
+	return cs, failed, nil
 }
 
 func InspectNetwork(run Runner, name string) (Network, error) {
