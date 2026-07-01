@@ -47,6 +47,10 @@ var (
 	statusErrStyle  = lipgloss.NewStyle().Foreground(colorWarn).Bold(true)
 	statusWarnStyle = lipgloss.NewStyle().Foreground(colorYellow)
 
+	// Loading screen.
+	spinnerStyle = lipgloss.NewStyle().Foreground(colorAccent)
+	loadingStyle = lipgloss.NewStyle().Foreground(colorText).Bold(true)
+
 	// YAML syntax highlighting.
 	yamlKeyStyle     = lipgloss.NewStyle().Foreground(colorAccent)
 	yamlValueStyle   = lipgloss.NewStyle().Foreground(colorText)

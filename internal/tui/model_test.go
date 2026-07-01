@@ -37,6 +37,32 @@ func TestCursorDown(t *testing.T) {
 	}
 }
 
+func TestEnterShowsLoadingScreen(t *testing.T) {
+	m := newModel().WithBuild(func(ids []string) tea.Cmd {
+		return func() tea.Msg { return PreviewReadyMsg{YAML: "services: {}"} }
+	})
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace}) // select row 0
+	m = m2.(Model)
+	m3, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = m3.(Model)
+	if m.screen != ScreenLoading {
+		t.Fatalf("expected loading screen, got %d", m.screen)
+	}
+	if cmd == nil {
+		t.Fatal("expected build+spinner batch command")
+	}
+}
+
+func TestPreviewReadyLeavesLoading(t *testing.T) {
+	m := newModel()
+	m.screen = ScreenLoading
+	m2, _ := m.Update(PreviewReadyMsg{YAML: "services: {}"})
+	m = m2.(Model)
+	if m.screen != ScreenPreview {
+		t.Fatalf("expected preview after build, got %d", m.screen)
+	}
+}
+
 func TestPreviewReadySwitchesScreen(t *testing.T) {
 	m := newModel()
 	m2, _ := m.Update(PreviewReadyMsg{YAML: "services: {}"})

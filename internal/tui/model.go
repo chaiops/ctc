@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/centerseat/ctc/internal/docker"
@@ -13,6 +14,7 @@ type Screen int
 
 const (
 	ScreenList Screen = iota
+	ScreenLoading
 	ScreenPreview
 )
 
@@ -52,10 +54,14 @@ type Model struct {
 	err     string
 	width   int
 	height  int
+	spinner spinner.Model
 }
 
 func New(items []docker.ContainerSummary) Model {
-	return Model{items: items, checked: map[int]bool{}, screen: ScreenList}
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = spinnerStyle
+	return Model{items: items, checked: map[int]bool{}, screen: ScreenList, spinner: sp}
 }
 
 // WithBuild attaches the compose-build command factory.
@@ -86,6 +92,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		return m, nil
+	case spinner.TickMsg:
+		if m.screen == ScreenLoading {
+			var cmd tea.Cmd
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
 		return m, nil
 	case PreviewReadyMsg:
 		m.yaml = msg.YAML
@@ -132,7 +145,8 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.checked[m.cursor] = !m.checked[m.cursor]
 	case tea.KeyEnter:
 		if len(m.Selected()) > 0 && m.build != nil {
-			return m, m.build(m.Selected())
+			m.screen = ScreenLoading
+			return m, tea.Batch(m.build(m.Selected()), m.spinner.Tick)
 		}
 	case tea.KeyRunes:
 		switch msg.Runes[0] {
@@ -176,10 +190,27 @@ func (m Model) updatePreview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	if m.screen == ScreenPreview {
+	switch m.screen {
+	case ScreenLoading:
+		return m.loadingView()
+	case ScreenPreview:
 		return m.previewView()
+	default:
+		return m.listView()
 	}
-	return m.listView()
+}
+
+func (m Model) loadingView() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("  ctc · container → compose  "))
+	b.WriteString("\n\n")
+	b.WriteString(m.spinner.View())
+	b.WriteString(loadingStyle.Render(fmt.Sprintf(
+		" Inspecting %d container(s) and building compose…", len(m.Selected()))))
+	b.WriteString("\n")
+	b.WriteString(subtitleStyle.Render("   reading networks, volumes, ports, runtime config"))
+	b.WriteString("\n")
+	return b.String()
 }
 
 func (m Model) listView() string {
