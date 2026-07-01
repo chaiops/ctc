@@ -132,3 +132,32 @@ func TestEphemeralPortNoLeadingColon(t *testing.T) {
 		t.Fatalf("expected [80/tcp], got %+v", got)
 	}
 }
+
+func TestFilterUserEnv(t *testing.T) {
+	image := []string{"PATH=/usr/bin", "NGINX_VERSION=1.27", "FOO=default"}
+	container := []string{
+		"PATH=/usr/bin",       // identical image default -> drop
+		"NGINX_VERSION=1.27",  // identical image default -> drop
+		"FOO=override",        // user changed value -> keep
+		"APP_KEY=secret",      // user-added, not in image -> keep
+	}
+	got := FilterUserEnv(container, image)
+	want := []string{"FOO=override", "APP_KEY=secret"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+}
+
+func TestFilterUserEnvNilImage(t *testing.T) {
+	// No image env known -> keep everything (can't distinguish).
+	container := []string{"A=1", "B=2"}
+	got := FilterUserEnv(container, nil)
+	if len(got) != 2 {
+		t.Fatalf("expected passthrough, got %v", got)
+	}
+}

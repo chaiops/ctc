@@ -35,6 +35,16 @@ func main() {
 			if err != nil {
 				return tui.PreviewReadyMsg{YAML: "# error: " + err.Error()}
 			}
+			// Keep only user-supplied env vars: drop entries identical to the
+			// image's baked-in defaults. If the image can't be inspected, leave
+			// the container's env untouched.
+			for i := range cs {
+				imgEnv, ierr := docker.InspectImage(run, cs[i].Config.Image)
+				if ierr != nil {
+					continue
+				}
+				cs[i].Config.Env = compose.FilterUserEnv(cs[i].Config.Env, imgEnv)
+			}
 			nets := relatedNetworks(run, cs)
 			vols := relatedVolumes(run, cs)
 			y, err := compose.Build(cs, nets, vols).YAML()

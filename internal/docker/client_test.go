@@ -59,3 +59,19 @@ func TestInspectNetwork(t *testing.T) {
 		t.Fatalf("got %+v", n)
 	}
 }
+
+func TestInspectImage(t *testing.T) {
+	run := func(name string, args ...string) ([]byte, error) {
+		if args[0] != "image" || args[1] != "inspect" {
+			t.Fatalf("unexpected: %v", args)
+		}
+		return []byte(`[{"Config":{"Env":["PATH=/usr/bin","NGINX_VERSION=1.27"]}}]`), nil
+	}
+	env, err := InspectImage(run, "nginx:1.27")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(env) != 2 || env[1] != "NGINX_VERSION=1.27" {
+		t.Fatalf("got %v", env)
+	}
+}

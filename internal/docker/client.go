@@ -89,3 +89,27 @@ func InspectVolume(run Runner, name string) (Volume, error) {
 	}
 	return vs[0], nil
 }
+
+// imageInspect is the subset of `docker image inspect` we need.
+type imageInspect struct {
+	Config struct {
+		Env []string
+	}
+}
+
+// InspectImage returns the default environment baked into an image (its
+// Dockerfile ENV entries, fully resolved through base images).
+func InspectImage(run Runner, ref string) ([]string, error) {
+	out, err := run("docker", "image", "inspect", ref)
+	if err != nil {
+		return nil, err
+	}
+	var imgs []imageInspect
+	if err := json.Unmarshal(out, &imgs); err != nil {
+		return nil, fmt.Errorf("parse image inspect: %w", err)
+	}
+	if len(imgs) == 0 {
+		return nil, fmt.Errorf("image %q not found", ref)
+	}
+	return imgs[0].Config.Env, nil
+}

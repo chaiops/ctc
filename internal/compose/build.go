@@ -163,3 +163,26 @@ func devices(reqs []docker.DeviceRequest) []Device {
 
 func sortStrings(s []string) { sort.Strings(s) }
 func itoa(n int) string      { return strconv.Itoa(n) }
+
+// FilterUserEnv returns the environment entries a user supplied at run time,
+// by removing entries that are byte-for-byte identical to an image default.
+// A variable whose value the user overrode is kept (its KEY=VALUE differs from
+// the image's). When imageEnv is nil (image env unknown), all entries are
+// returned unchanged, since the two cannot be distinguished.
+func FilterUserEnv(containerEnv, imageEnv []string) []string {
+	if imageEnv == nil {
+		return containerEnv
+	}
+	defaults := make(map[string]bool, len(imageEnv))
+	for _, e := range imageEnv {
+		defaults[e] = true
+	}
+	var out []string
+	for _, e := range containerEnv {
+		if defaults[e] {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
