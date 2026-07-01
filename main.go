@@ -18,14 +18,15 @@ func main() {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-	items, err := docker.List(run)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
-	}
-	if len(items) == 0 {
-		fmt.Fprintln(os.Stderr, "no containers found")
-		os.Exit(0)
+
+	listFn := func() tea.Cmd {
+		return func() tea.Msg {
+			items, err := docker.List(run)
+			if err != nil {
+				return tui.ContainersLoadedMsg{Err: err.Error()}
+			}
+			return tui.ContainersLoadedMsg{Items: items}
+		}
 	}
 
 	build := func(ids []string) tea.Cmd {
@@ -82,7 +83,7 @@ func main() {
 		}
 	}
 
-	m := tui.New(items).WithBuild(build).WithEdit(editFn).WithSave(saveFn)
+	m := tui.New().WithList(listFn).WithBuild(build).WithEdit(editFn).WithSave(saveFn)
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)

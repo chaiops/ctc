@@ -13,12 +13,22 @@ import (
 type Screen int
 
 const (
-	ScreenList Screen = iota
+	ScreenStartup Screen = iota
+	ScreenList
 	ScreenLoading
 	ScreenPreview
 )
 
 type PreviewReadyMsg struct{ YAML string }
+
+// ContainersLoadedMsg carries the result of the initial container listing.
+type ContainersLoadedMsg struct {
+	Items []docker.ContainerSummary
+	Err   string
+}
+
+// ListFunc is injected by main: query docker for the container list.
+type ListFunc func() tea.Cmd
 
 // BuildFunc is injected by main: given selected IDs, produce compose YAML.
 type BuildFunc func(ids []string) tea.Cmd
@@ -47,22 +57,29 @@ type Model struct {
 	screen  Screen
 	yaml    string
 	offset  int // preview scroll
+	list    ListFunc
 	build   BuildFunc
 	save    SaveFunc
 	edit    EditFunc
 	status  string
 	err     string
+	loadErr string
 	width   int
 	height  int
 	spinner spinner.Model
 }
 
-func New(items []docker.ContainerSummary) Model {
+// New starts on the startup screen; the container list is loaded via ListFunc
+// once the program is running (see Init).
+func New() Model {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	sp.Style = spinnerStyle
-	return Model{items: items, checked: map[int]bool{}, screen: ScreenList, spinner: sp}
+	return Model{checked: map[int]bool{}, screen: ScreenStartup, spinner: sp}
 }
+
+// WithList attaches the container-listing command factory.
+func (m Model) WithList(f ListFunc) Model { m.list = f; return m }
 
 // WithBuild attaches the compose-build command factory.
 func (m Model) WithBuild(b BuildFunc) Model { m.build = b; return m }
@@ -85,7 +102,12 @@ func (m Model) Selected() []string {
 	return out
 }
 
-func (m Model) Init() tea.Cmd { return nil }
+func (m Model) Init() tea.Cmd {
+	if m.list != nil {
+		return tea.Batch(m.list(), m.spinner.Tick)
+	}
+	return m.spinner.Tick
+}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -94,11 +116,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 	case spinner.TickMsg:
-		if m.screen == ScreenLoading {
+		if m.screen == ScreenLoading || m.screen == ScreenStartup {
 			var cmd tea.Cmd
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd
 		}
+		return m, nil
+	case ContainersLoadedMsg:
+		if msg.Err != "" {
+			m.loadErr = msg.Err
+			m.screen = ScreenList // render error+empty state, allow quit
+			return m, nil
+		}
+		m.items = msg.Items
+		m.screen = ScreenList
 		return m, nil
 	case PreviewReadyMsg:
 		m.yaml = msg.YAML
@@ -123,10 +154,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyMsg:
-		if m.screen == ScreenList {
+		switch m.screen {
+		case ScreenStartup, ScreenLoading:
+			// Only allow quitting while work is in flight.
+			if msg.Type == tea.KeyCtrlC {
+				return m, tea.Quit
+			}
+			if msg.Type == tea.KeyRunes && len(msg.Runes) > 0 && msg.Runes[0] == 'q' {
+				return m, tea.Quit
+			}
+			return m, nil
+		case ScreenList:
 			return m.updateList(msg)
+		default:
+			return m.updatePreview(msg)
 		}
-		return m.updatePreview(msg)
 	}
 	return m, nil
 }
@@ -191,6 +233,8 @@ func (m Model) updatePreview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	switch m.screen {
+	case ScreenStartup:
+		return m.startupView()
 	case ScreenLoading:
 		return m.loadingView()
 	case ScreenPreview:
@@ -198,6 +242,18 @@ func (m Model) View() string {
 	default:
 		return m.listView()
 	}
+}
+
+func (m Model) startupView() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("  ctc · container → compose  "))
+	b.WriteString("\n\n")
+	b.WriteString(m.spinner.View())
+	b.WriteString(loadingStyle.Render(" Connecting to Docker and listing containers…"))
+	b.WriteString("\n")
+	b.WriteString(subtitleStyle.Render("   press q to cancel"))
+	b.WriteString("\n")
+	return b.String()
 }
 
 func (m Model) loadingView() string {
@@ -218,6 +274,18 @@ func (m Model) listView() string {
 
 	b.WriteString(titleStyle.Render("  ctc · container → compose  "))
 	b.WriteString("\n")
+
+	if m.loadErr != "" {
+		b.WriteString(statusErrStyle.Render("✗ "+m.loadErr) + "\n\n")
+		b.WriteString(help("q", "quit"))
+		return b.String()
+	}
+	if len(m.items) == 0 {
+		b.WriteString(subtitleStyle.Render("No containers found.") + "\n\n")
+		b.WriteString(help("q", "quit"))
+		return b.String()
+	}
+
 	n := len(m.Selected())
 	b.WriteString(subtitleStyle.Render(fmt.Sprintf(
 		"%d container(s) · %d selected", len(m.items), n)))

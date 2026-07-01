@@ -68,9 +68,45 @@ resolve_gobin() {
   [ -z "$GOBIN" ] && GOBIN="$(go env GOPATH 2>/dev/null)/bin"
 }
 
+# spin runs a command in the background while animating a spinner + message.
+# Falls back to a plain message when stdout is not a terminal.
+spin() {
+  local msg="$1"; shift
+  local log; log="$(mktemp)"
+
+  if [ ! -t 1 ]; then
+    step "$msg"
+    if "$@" >"$log" 2>&1; then rm -f "$log"; return 0; fi
+    cat "$log" >&2; rm -f "$log"; return 1
+  fi
+
+  "$@" >"$log" 2>&1 &
+  local pid=$!
+  local frames='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  local i=0
+  # Hide cursor while spinning.
+  printf '\033[?25l'
+  while kill -0 "$pid" 2>/dev/null; do
+    local f="${frames:i++%${#frames}:1}"
+    printf '\r%s%s%s %s' "$GREEN" "$f" "$RESET" "$msg"
+    sleep 0.1
+  done
+  printf '\033[?25h\r\033[K' # restore cursor, clear line
+
+  if wait "$pid"; then
+    info "$msg — done"
+    rm -f "$log"
+    return 0
+  fi
+  err "$msg — failed"
+  cat "$log" >&2
+  rm -f "$log"
+  return 1
+}
+
 install_ctc() {
-  step "building ${BIN_NAME} from ${MODULE}@${VERSION}"
-  GOBIN="$GOBIN" go install "${MODULE}@${VERSION}" \
+  spin "building ${BIN_NAME} from ${MODULE}@${VERSION}" \
+    env GOBIN="$GOBIN" go install "${MODULE}@${VERSION}" \
     || fail "go install failed"
 }
 

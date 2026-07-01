@@ -7,11 +7,16 @@ import (
 	"github.com/chaiops/ctc/internal/docker"
 )
 
+// newModel returns a model already past the startup screen with two
+// containers loaded, as if ContainersLoadedMsg had arrived.
 func newModel() Model {
-	return New([]docker.ContainerSummary{
+	m := New()
+	m.items = []docker.ContainerSummary{
 		{ID: "a", Names: "web", Image: "nginx"},
 		{ID: "b", Names: "db", Image: "postgres"},
-	})
+	}
+	m.screen = ScreenList
+	return m
 }
 
 func key(r rune) tea.Msg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
@@ -34,6 +39,36 @@ func TestCursorDown(t *testing.T) {
 	m = m2.(Model)
 	if m.cursor != 1 {
 		t.Fatalf("cursor: %d", m.cursor)
+	}
+}
+
+func TestStartsOnStartupScreen(t *testing.T) {
+	m := New()
+	if m.screen != ScreenStartup {
+		t.Fatalf("expected startup screen, got %d", m.screen)
+	}
+}
+
+func TestContainersLoadedShowsList(t *testing.T) {
+	m := New()
+	m2, _ := m.Update(ContainersLoadedMsg{Items: []docker.ContainerSummary{
+		{ID: "a", Names: "web", Image: "nginx"},
+	}})
+	m = m2.(Model)
+	if m.screen != ScreenList {
+		t.Fatalf("expected list screen, got %d", m.screen)
+	}
+	if len(m.items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(m.items))
+	}
+}
+
+func TestContainersLoadErrorShowsError(t *testing.T) {
+	m := New()
+	m2, _ := m.Update(ContainersLoadedMsg{Err: "docker daemon not running"})
+	m = m2.(Model)
+	if m.screen != ScreenList || m.loadErr == "" {
+		t.Fatalf("expected list screen with loadErr, got screen=%d err=%q", m.screen, m.loadErr)
 	}
 }
 
