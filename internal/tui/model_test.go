@@ -16,13 +16,15 @@ func newModel() Model {
 
 func key(r rune) tea.Msg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
 
-func TestToggleAndSelect(t *testing.T) {
+// Bubble Tea delivers the spacebar as KeySpace, not KeyRunes. This mirrors
+// what a real terminal sends.
+func TestSpaceKeyTogglesSelection(t *testing.T) {
 	m := newModel()
-	m2, _ := m.Update(key(' ')) // check row 0
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
 	m = m2.(Model)
 	sel := m.Selected()
 	if len(sel) != 1 || sel[0] != "a" {
-		t.Fatalf("selected: %v", sel)
+		t.Fatalf("KeySpace should toggle row 0, got selected: %v", sel)
 	}
 }
 

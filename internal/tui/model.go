@@ -121,14 +121,14 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.cursor < len(m.items)-1 {
 			m.cursor++
 		}
+	case tea.KeySpace:
+		m.checked[m.cursor] = !m.checked[m.cursor]
 	case tea.KeyEnter:
 		if len(m.Selected()) > 0 && m.build != nil {
 			return m, m.build(m.Selected())
 		}
 	case tea.KeyRunes:
 		switch msg.Runes[0] {
-		case ' ':
-			m.checked[m.cursor] = !m.checked[m.cursor]
 		case 'a':
 			all := len(m.Selected()) != len(m.items)
 			for i := range m.items {
