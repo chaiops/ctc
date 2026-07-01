@@ -1,0 +1,48 @@
+name: Deploy install script to Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - install.sh
+      - site/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; don't cancel an in-progress run.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble site from install.sh
+        run: |
+          mkdir -p _site
+          # The bare root must return the script itself so `curl <domain> | bash` works.
+          cp install.sh _site/index.html
+          # Also expose it at an explicit path.
+          cp install.sh _site/install.sh
+          cp site/CNAME _site/CNAME
+          touch _site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
