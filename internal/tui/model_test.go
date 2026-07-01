@@ -43,3 +43,29 @@ func TestPreviewReadySwitchesScreen(t *testing.T) {
 		t.Fatalf("screen=%d yaml=%q", m.screen, m.yaml)
 	}
 }
+
+func TestPreviewSaveInvokesHook(t *testing.T) {
+	called := false
+	m := newModel().WithSave(func(y string) tea.Cmd {
+		return func() tea.Msg { called = true; return SavedMsg{Path: "x", OK: true} }
+	})
+	m.SetPreview("services: {}")
+	_, cmd := m.Update(key('s'))
+	if cmd == nil {
+		t.Fatal("expected save cmd")
+	}
+	cmd() // run it
+	if !called {
+		t.Fatal("save hook not called")
+	}
+}
+
+func TestEditedMsgUpdatesYAML(t *testing.T) {
+	m := newModel()
+	m.SetPreview("old")
+	m2, _ := m.Update(EditedMsg{YAML: "new"})
+	m = m2.(Model)
+	if m.yaml != "new" {
+		t.Fatalf("yaml=%q", m.yaml)
+	}
+}

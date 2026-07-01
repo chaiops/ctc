@@ -43,7 +43,41 @@ func main() {
 		}
 	}
 
-	m := tui.New(items).WithBuild(build)
+	editFn := func(y string) tea.Cmd {
+		tmp, err := os.CreateTemp("", "ctc-*.yml")
+		if err != nil {
+			return func() tea.Msg { return tui.EditedMsg{Err: err.Error()} }
+		}
+		tmp.WriteString(y)
+		tmp.Close()
+		ed := os.Getenv("EDITOR")
+		if ed == "" {
+			ed = "vi"
+		}
+		c := exec.Command(ed, tmp.Name())
+		return tea.ExecProcess(c, func(err error) tea.Msg {
+			defer os.Remove(tmp.Name())
+			if err != nil {
+				return tui.EditedMsg{Err: err.Error()}
+			}
+			b, rerr := os.ReadFile(tmp.Name())
+			if rerr != nil {
+				return tui.EditedMsg{Err: rerr.Error()}
+			}
+			return tui.EditedMsg{YAML: string(b)}
+		})
+	}
+	saveFn := func(y string) tea.Cmd {
+		return func() tea.Msg {
+			ok, err := save("docker-compose.yml", []byte(y), func() bool { return true })
+			if err != nil {
+				return tui.SavedMsg{Err: err.Error()}
+			}
+			return tui.SavedMsg{Path: "docker-compose.yml", OK: ok}
+		}
+	}
+
+	m := tui.New(items).WithBuild(build).WithEdit(editFn).WithSave(saveFn)
 	if _, err := tea.NewProgram(m).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
@@ -82,16 +116,6 @@ func relatedVolumes(run docker.Runner, cs []docker.Container) []docker.Volume {
 		}
 	}
 	return out
-}
-
-func editInEditor(path string) error {
-	ed := os.Getenv("EDITOR")
-	if ed == "" {
-		ed = "vi"
-	}
-	cmd := exec.Command(ed, path)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	return cmd.Run()
 }
 
 func save(path string, data []byte, confirm func() bool) (bool, error) {

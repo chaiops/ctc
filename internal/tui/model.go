@@ -20,6 +20,23 @@ type PreviewReadyMsg struct{ YAML string }
 // BuildFunc is injected by main: given selected IDs, produce compose YAML.
 type BuildFunc func(ids []string) tea.Cmd
 
+// SaveFunc is injected by main: given the current YAML, persist it.
+type SaveFunc func(yaml string) tea.Cmd
+
+// EditFunc is injected by main: given the current YAML, open it in an editor.
+type EditFunc func(yaml string) tea.Cmd
+
+type SavedMsg struct {
+	Path string
+	OK   bool
+	Err  string
+}
+
+type EditedMsg struct {
+	YAML string
+	Err  string
+}
+
 type Model struct {
 	items   []docker.ContainerSummary
 	cursor  int
@@ -28,6 +45,9 @@ type Model struct {
 	yaml    string
 	offset  int // preview scroll
 	build   BuildFunc
+	save    SaveFunc
+	edit    EditFunc
+	status  string
 	err     string
 }
 
@@ -37,6 +57,12 @@ func New(items []docker.ContainerSummary) Model {
 
 // WithBuild attaches the compose-build command factory.
 func (m Model) WithBuild(b BuildFunc) Model { m.build = b; return m }
+
+// WithSave attaches the save command factory.
+func (m Model) WithSave(f SaveFunc) Model { m.save = f; return m }
+
+// WithEdit attaches the edit command factory.
+func (m Model) WithEdit(f EditFunc) Model { m.edit = f; return m }
 
 func (m *Model) SetPreview(y string) { m.yaml = y; m.screen = ScreenPreview }
 
@@ -58,6 +84,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.yaml = msg.YAML
 		m.screen = ScreenPreview
 		m.offset = 0
+		return m, nil
+	case SavedMsg:
+		if msg.OK {
+			m.status = "saved: " + msg.Path
+		} else if msg.Err != "" {
+			m.status = "save error: " + msg.Err
+		} else {
+			m.status = "save cancelled"
+		}
+		return m, nil
+	case EditedMsg:
+		if msg.Err != "" {
+			m.status = "edit error: " + msg.Err
+		} else {
+			m.yaml = msg.YAML
+			m.offset = 0
+		}
 		return m, nil
 	case tea.KeyMsg:
 		if m.screen == ScreenList {
@@ -109,8 +152,17 @@ func (m Model) updatePreview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyEsc:
 		m.screen = ScreenList
 	case tea.KeyRunes:
-		if msg.Runes[0] == 'q' {
+		switch msg.Runes[0] {
+		case 'q':
 			return m, tea.Quit
+		case 's':
+			if m.save != nil {
+				return m, m.save(m.yaml)
+			}
+		case 'e':
+			if m.edit != nil {
+				return m, m.edit(m.yaml)
+			}
 		}
 	}
 	return m, nil
@@ -122,6 +174,9 @@ func (m Model) View() string {
 		b.WriteString("Preview  [e]dit  [s]ave  [esc] back  [q]uit\n\n")
 		if m.err != "" {
 			b.WriteString("! " + m.err + "\n\n")
+		}
+		if m.status != "" {
+			b.WriteString(m.status + "\n\n")
 		}
 		lines := strings.Split(m.yaml, "\n")
 		for i := m.offset; i < len(lines) && i < m.offset+30; i++ {
