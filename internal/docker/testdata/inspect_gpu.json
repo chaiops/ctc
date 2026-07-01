@@ -1,0 +1,31 @@
+[
+  {
+    "Id": "abc123",
+    "Name": "/web",
+    "Config": {
+      "Image": "nginx:1.27",
+      "Env": ["FOO=bar", "BAZ=qux"],
+      "Cmd": ["nginx", "-g", "daemon off;"],
+      "Entrypoint": null,
+      "Labels": {"com.example.role": "frontend"}
+    },
+    "HostConfig": {
+      "RestartPolicy": {"Name": "unless-stopped", "MaximumRetryCount": 0},
+      "Privileged": false,
+      "CapAdd": ["NET_ADMIN"],
+      "CapDrop": null,
+      "Runtime": "nvidia",
+      "DeviceRequests": [
+        {"Driver": "nvidia", "Count": -1, "Capabilities": [["gpu"]]}
+      ],
+      "PortBindings": {"80/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8080"}]}
+    },
+    "NetworkSettings": {
+      "Networks": {"appnet": {"Aliases": ["web"]}}
+    },
+    "Mounts": [
+      {"Type": "bind", "Source": "/srv/html", "Destination": "/usr/share/nginx/html", "RW": true},
+      {"Type": "volume", "Name": "datavol", "Destination": "/data", "RW": true}
+    ]
+  }
+]
