@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/centerseat/ctc/internal/compose"
 	"github.com/centerseat/ctc/internal/docker"
@@ -29,7 +30,7 @@ func main() {
 
 	build := func(ids []string) tea.Cmd {
 		return func() tea.Msg {
-			cs, err := docker.Inspect(run, ids)
+			cs, failed, err := docker.Inspect(run, ids)
 			if err != nil {
 				return tui.PreviewReadyMsg{YAML: "# error: " + err.Error()}
 			}
@@ -39,7 +40,11 @@ func main() {
 			if err != nil {
 				return tui.PreviewReadyMsg{YAML: "# error: " + err.Error()}
 			}
-			return tui.PreviewReadyMsg{YAML: string(y)}
+			out := string(y)
+			if len(failed) > 0 {
+				out = "# warning: could not inspect: " + strings.Join(failed, ",") + "\n" + out
+			}
+			return tui.PreviewReadyMsg{YAML: out}
 		}
 	}
 
