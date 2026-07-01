@@ -142,13 +142,22 @@ main() {
   printf '\n'
   info "${BIN_NAME} installed to ${BOLD}${target}${RESET}"
 
-  if on_path; then
-    printf '\nRun %s%s%s to get started.\n' "$BOLD" "$BIN_NAME" "$RESET"
-  else
-    printf '\n%s%s is not on your PATH.%s Add this to your shell profile:\n\n' \
+  if ! on_path; then
+    printf '\n%s%s is not on your PATH.%s To run it later, add this to your shell profile:\n\n' \
       "$YELLOW" "$GOBIN" "$RESET"
-    printf '    export PATH="%s:$PATH"\n\n' "$GOBIN"
-    printf 'Then run %s%s%s.\n' "$BOLD" "$BIN_NAME" "$RESET"
+    printf '    export PATH="%s:$PATH"\n' "$GOBIN"
+  fi
+
+  # Launch immediately. When invoked as `curl … | bash`, this script owns
+  # bash's stdin, so the binary's stdin is the pipe, not the terminal. A TUI
+  # needs the real tty — redirect stdin/stdout to /dev/tty when one exists.
+  if [ -e /dev/tty ] && [ -r /dev/tty ]; then
+    printf '\n'
+    info "launching ${BIN_NAME}…"
+    exec "$target" </dev/tty >/dev/tty
+  else
+    printf '\nNo terminal available. Run %s%s%s to get started.\n' \
+      "$BOLD" "$BIN_NAME" "$RESET"
   fi
 }
 
