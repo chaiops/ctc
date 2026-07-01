@@ -2,7 +2,7 @@ name: Deploy install script to Pages
 
 on:
   push:
-    branches: [master]
+    branches: [main]
     paths:
       - install.sh
       - site/**
